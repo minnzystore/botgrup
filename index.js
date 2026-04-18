@@ -1,12 +1,19 @@
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require("@whiskeysockets/baileys")
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    fetchLatestBaileysVersion,
+    DisconnectReason
+} = require("@whiskeysockets/baileys")
+
 const P = require("pino")
 const qrcode = require("qrcode-terminal")
 const fs = require("fs")
 
 const owner = "6283847956426@s.whatsapp.net"
+const prefix = "."
 
 // =========================
-// SIMPLE DB (GANTI system.js)
+// SIMPLE DATABASE
 // =========================
 const DB_FILE = "./database.json"
 
@@ -19,6 +26,9 @@ function saveDB(data) {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2))
 }
 
+// =========================
+// QUEUE SYSTEM
+// =========================
 let queue = []
 let isProcessing = false
 
@@ -35,38 +45,13 @@ async function runQueue() {
 }
 
 // =========================
-
+// GLOBAL
+// =========================
 global.processed = new Set()
 global.lastMsg = {}
 global.reqCount = {}
 
 const sleep = (ms) => new Promise(res => setTimeout(res, ms))
-
-// =========================
-// WIB TIME
-// =========================
-function getWIBTime() {
-    const now = new Date()
-
-    const formatter = new Intl.DateTimeFormat("id-ID", {
-        timeZone: "Asia/Jakarta",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false
-    })
-
-    const parts = formatter.formatToParts(now)
-    const get = (type) => parts.find(p => p.type === type)?.value
-
-    return {
-        date: `${get("year")}-${get("month")}-${get("day")}`,
-        time: `${get("hour")}:${get("minute")}:${get("second")}`
-    }
-}
 
 // =========================
 // ANTI SPAM
@@ -96,7 +81,7 @@ function allowRequest(user) {
 async function safeSend(sock, jid, msg) {
     try {
         await sock.sendMessage(jid, msg)
-        await sleep(800)
+        await sleep(700)
     } catch (e) {
         console.log("SEND ERROR:", e)
     }
@@ -135,15 +120,38 @@ async function startBot() {
             console.log("❌ DISCONNECT:", reason)
 
             if (reason !== DisconnectReason.loggedOut) {
-                setTimeout(() => startBot(), 3000)
+                setTimeout(startBot, 3000)
             } else {
-                console.log("⚠️ Session logout, scan ulang QR")
+                console.log("⚠️ Scan ulang QR")
             }
         }
     })
 
     // =========================
-    // LOAD COMMAND
+    // WELCOME / GOODBYE
+    // =========================
+    sock.ev.on("group-participants.update", async (data) => {
+        const { id, participants, action } = data
+
+        for (let user of participants) {
+            if (action === "add") {
+                await sock.sendMessage(id, {
+                    text: `👋 YOKOSO @${user.split("@")[0]}`,
+                    mentions: [user]
+                })
+            }
+
+            if (action === "remove") {
+                await sock.sendMessage(id, {
+                    text: `👋 SAYONARA @${user.split("@")[0]}`,
+                    mentions: [user]
+                })
+            }
+        }
+    })
+
+    // =========================
+    // LOAD COMMANDS
     // =========================
     const commands = new Map()
 
@@ -159,70 +167,56 @@ async function startBot() {
     // =========================
     // MESSAGE HANDLER
     // =========================
-    sock.ev.on("messages.upsert", async (msg) => {
+    sock.ev.on("messages.upsert", async ({ messages }) => {
         try {
-            const m = msg.messages?.[0]
-
-            if (!m || !m.message || !m.key) return
-            if (m.key.fromMe || m.key.remoteJid === "status@broadcast") return
+            const m = messages[0]
+            if (!m?.message || !m.key) return
+            if (m.key.fromMe) return
 
             const from = m.key.remoteJid
-
-            // KHUSUS GRUP
             if (!from.endsWith("@g.us")) return
 
-            const id = m.key.id
-            if (!id || global.processed.has(id)) return
-            global.processed.add(id)
-            setTimeout(() => global.processed.delete(id), 60000)
-
-            const sender = m.key.participant || from
-            const userJid = sender
-
-            const pushname = m.pushName || "User"
-
-            // ANTI SPAM
-            const nowTime = Date.now()
-            if (global.lastMsg[from] && nowTime - global.lastMsg[from] < 2000) return
-            global.lastMsg[from] = nowTime
-
-            if (!allowRequest(from)) return
-
+            const sender = m.key.participant
             const text = (
                 m.message?.conversation ||
                 m.message?.extendedTextMessage?.text ||
-                m.message?.imageMessage?.caption ||
-                m.message?.videoMessage?.caption ||
                 ""
-            ).toString().trim()
+            ).trim()
 
-            if (!text) return
+            if (!text.startsWith(prefix)) return
 
-            const { date, time } = getWIBTime()
+            const command = text.slice(1).split(" ")[0].toLowerCase()
 
-            console.log("📩 MSG:", from, text)
+            // anti spam
+            if (!allowRequest(sender)) return
 
             let db = loadDB()
 
-            // SAVE USER
-            if (!db[userJid]) {
-                db[userJid] = {
-                    name: pushname,
-                    createdAt: date,
-                    createdTime: time
-                }
+            if (!db[sender]) {
+                db[sender] = { created: Date.now() }
                 saveDB(db)
             }
 
-            // COMMAND
-            const command = text.split(" ")[0].toLowerCase().replace(/[^a-z0-9]/g, "")
-            const cmd = commands.get(command)
+            const metadata = await sock.groupMetadata(from)
+            const admins = metadata.participants
+                .filter(p => p.admin)
+                .map(p => p.id)
 
+            const isAdmin = admins.includes(sender)
+            const isOwner = sender === owner
+
+            const cmd = commands.get(command)
             if (!cmd) return
 
             queue.push(async () => {
                 try {
-                    await cmd.execute(sock, from, text, db, safeSend, owner, m)
+                    await cmd.execute(sock, from, text, db, safeSend, {
+                        isAdmin,
+                        isOwner,
+                        sender,
+                        metadata,
+                        m
+                    })
                 } catch (e) {
                     console.log("CMD ERROR:", e)
                 }
@@ -234,12 +228,6 @@ async function startBot() {
             console.log("ERROR:", e)
         }
     })
-
-    // AUTO CLEAN
-    setInterval(() => {
-        global.processed.clear()
-        global.reqCount = {}
-    }, 60000)
 }
 
 startBot()
