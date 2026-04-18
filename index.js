@@ -3,9 +3,38 @@ const P = require("pino")
 const qrcode = require("qrcode-terminal")
 const fs = require("fs")
 
-const { loadDB, saveDB, queue, runQueue } = require("./lib/system")
-
 const owner = "6283847956426@s.whatsapp.net"
+
+// =========================
+// SIMPLE DB (GANTI system.js)
+// =========================
+const DB_FILE = "./database.json"
+
+function loadDB() {
+    if (!fs.existsSync(DB_FILE)) return {}
+    return JSON.parse(fs.readFileSync(DB_FILE))
+}
+
+function saveDB(data) {
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2))
+}
+
+let queue = []
+let isProcessing = false
+
+async function runQueue() {
+    if (isProcessing) return
+    isProcessing = true
+
+    while (queue.length > 0) {
+        const job = queue.shift()
+        await job()
+    }
+
+    isProcessing = false
+}
+
+// =========================
 
 global.processed = new Set()
 global.lastMsg = {}
@@ -14,7 +43,7 @@ global.reqCount = {}
 const sleep = (ms) => new Promise(res => setTimeout(res, ms))
 
 // =========================
-// WIB TIME FIX
+// WIB TIME
 // =========================
 function getWIBTime() {
     const now = new Date()
@@ -132,7 +161,6 @@ async function startBot() {
     // =========================
     sock.ev.on("messages.upsert", async (msg) => {
         try {
-
             const m = msg.messages?.[0]
 
             if (!m || !m.message || !m.key) return
@@ -140,7 +168,7 @@ async function startBot() {
 
             const from = m.key.remoteJid
 
-            // ✅ KHUSUS GRUP
+            // KHUSUS GRUP
             if (!from.endsWith("@g.us")) return
 
             const id = m.key.id
@@ -151,14 +179,9 @@ async function startBot() {
             const sender = m.key.participant || from
             const userJid = sender
 
-            const pushname =
-                m.pushName ||
-                m.message?.pushName ||
-                "User"
+            const pushname = m.pushName || "User"
 
-            // =========================
             // ANTI SPAM
-            // =========================
             const nowTime = Date.now()
             if (global.lastMsg[from] && nowTime - global.lastMsg[from] < 2000) return
             global.lastMsg[from] = nowTime
@@ -178,13 +201,10 @@ async function startBot() {
             const { date, time } = getWIBTime()
 
             console.log("📩 MSG:", from, text)
-            console.log(`🕒 WIB TIME: ${date} | ${time}`)
 
             let db = loadDB()
 
-            // =========================
             // SAVE USER
-            // =========================
             if (!db[userJid]) {
                 db[userJid] = {
                     name: pushname,
@@ -194,9 +214,7 @@ async function startBot() {
                 saveDB(db)
             }
 
-            // =========================
-            // COMMAND HANDLER
-            // =========================
+            // COMMAND
             const command = text.split(" ")[0].toLowerCase().replace(/[^a-z0-9]/g, "")
             const cmd = commands.get(command)
 
@@ -217,9 +235,7 @@ async function startBot() {
         }
     })
 
-    // =========================
-    // AUTO CLEAN MEMORY
-    // =========================
+    // AUTO CLEAN
     setInterval(() => {
         global.processed.clear()
         global.reqCount = {}
