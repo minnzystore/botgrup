@@ -1,8 +1,8 @@
 module.exports = {
     name: "info",
-    execute: async (sock, from, text, db, safeSend, owner, m) => {
+    execute: async (sock, from, text, db, safeSend, ctx) => {
 
-        const metadata = await sock.groupMetadata(from)
+        const { metadata } = ctx
 
         const teks = `
 📊 INFO GRUP

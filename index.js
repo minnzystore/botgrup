@@ -9,17 +9,21 @@ const P = require("pino")
 const qrcode = require("qrcode-terminal")
 const fs = require("fs")
 
-const owner = "6283847956426@s.whatsapp.net"
+const owner = "6285798407870@s.whatsapp.net"
 const prefix = "."
 
 // =========================
-// SIMPLE DATABASE
+// DATABASE
 // =========================
 const DB_FILE = "./database.json"
 
 function loadDB() {
-    if (!fs.existsSync(DB_FILE)) return {}
-    return JSON.parse(fs.readFileSync(DB_FILE))
+    try {
+        if (!fs.existsSync(DB_FILE)) return {}
+        return JSON.parse(fs.readFileSync(DB_FILE))
+    } catch {
+        return {}
+    }
 }
 
 function saveDB(data) {
@@ -27,7 +31,21 @@ function saveDB(data) {
 }
 
 // =========================
-// QUEUE SYSTEM
+// OWNER PROTECT (GLOBAL)
+// =========================
+function isOwnerJid(jid) {
+    if (!jid) return false
+
+    const owners = [owner]
+    const clean = String(jid).trim()
+
+    return owners.some(o =>
+        clean === o || clean.includes(o.split("@")[0])
+    )
+}
+
+// =========================
+// QUEUE
 // =========================
 let queue = []
 let isProcessing = false
@@ -47,8 +65,6 @@ async function runQueue() {
 // =========================
 // GLOBAL
 // =========================
-global.processed = new Set()
-global.lastMsg = {}
 global.reqCount = {}
 
 const sleep = (ms) => new Promise(res => setTimeout(res, ms))
@@ -57,6 +73,8 @@ const sleep = (ms) => new Promise(res => setTimeout(res, ms))
 // ANTI SPAM
 // =========================
 function allowRequest(user) {
+    if (!user) return false
+
     const now = Date.now()
 
     if (!global.reqCount[user]) {
@@ -80,6 +98,7 @@ function allowRequest(user) {
 // =========================
 async function safeSend(sock, jid, msg) {
     try {
+        if (!jid) return
         await sock.sendMessage(jid, msg)
         await sleep(700)
     } catch (e) {
@@ -131,22 +150,32 @@ async function startBot() {
     // WELCOME / GOODBYE
     // =========================
     sock.ev.on("group-participants.update", async (data) => {
-        const { id, participants, action } = data
+        try {
+            const { id, participants, action } = data
 
-        for (let user of participants) {
-            if (action === "add") {
-                await sock.sendMessage(id, {
-                    text: `👋 YOKOSO @${user.split("@")[0]}`,
-                    mentions: [user]
-                })
+            for (let user of participants) {
+                const jid = typeof user === "string" ? user : user?.id
+                if (!jid) continue
+
+                const number = jid.split("@")[0]
+
+                if (action === "add") {
+                    await safeSend(sock, id, {
+                        text: `👋 Welcome @${number}`,
+                        mentions: [jid]
+                    })
+                }
+
+                if (action === "remove") {
+                    await safeSend(sock, id, {
+                        text: `👋 Goodbye @${number}`,
+                        mentions: [jid]
+                    })
+                }
             }
 
-            if (action === "remove") {
-                await sock.sendMessage(id, {
-                    text: `👋 SAYONARA @${user.split("@")[0]}`,
-                    mentions: [user]
-                })
-            }
+        } catch (e) {
+            console.log("WELCOME ERROR:", e)
         }
     })
 
@@ -157,9 +186,13 @@ async function startBot() {
 
     if (fs.existsSync("./commands")) {
         for (const file of fs.readdirSync("./commands")) {
-            const cmd = require(`./commands/${file}`)
-            if (cmd?.name && cmd?.execute) {
-                commands.set(cmd.name.toLowerCase(), cmd)
+            try {
+                const cmd = require(`./commands/${file}`)
+                if (cmd?.name && cmd?.execute) {
+                    commands.set(cmd.name.toLowerCase(), cmd)
+                }
+            } catch (e) {
+                console.log("LOAD CMD ERROR:", e)
             }
         }
     }
@@ -169,14 +202,16 @@ async function startBot() {
     // =========================
     sock.ev.on("messages.upsert", async ({ messages }) => {
         try {
-            const m = messages[0]
+            const m = messages?.[0]
             if (!m?.message || !m.key) return
             if (m.key.fromMe) return
 
             const from = m.key.remoteJid
-            if (!from.endsWith("@g.us")) return
+            if (!from || !from.endsWith("@g.us")) return
 
-            const sender = m.key.participant
+            const sender = m.key.participant || m.key.remoteJid
+            if (!sender) return
+
             const text = (
                 m.message?.conversation ||
                 m.message?.extendedTextMessage?.text ||
@@ -185,17 +220,38 @@ async function startBot() {
 
             if (!text.startsWith(prefix)) return
 
-            const command = text.slice(1).split(" ")[0].toLowerCase()
-
-            // anti spam
             if (!allowRequest(sender)) return
+
+            const command = text.slice(1).split(" ")[0].toLowerCase()
 
             let db = loadDB()
 
+            // =========================
+            // EXP SYSTEM
+            // =========================
             if (!db[sender]) {
-                db[sender] = { created: Date.now() }
-                saveDB(db)
+                db[sender] = {
+                    exp: 0,
+                    level: 1,
+                    created: Date.now()
+                }
             }
+
+            db[sender].exp += 10
+
+            const need = db[sender].level * 100
+
+            if (db[sender].exp >= need) {
+                db[sender].level++
+                db[sender].exp = 0
+
+                await safeSend(sock, from, {
+                    text: `🎉 @${sender.split("@")[0]} naik ke level ${db[sender].level}!`,
+                    mentions: [sender]
+                })
+            }
+
+            saveDB(db)
 
             const metadata = await sock.groupMetadata(from)
             const admins = metadata.participants
@@ -203,7 +259,7 @@ async function startBot() {
                 .map(p => p.id)
 
             const isAdmin = admins.includes(sender)
-            const isOwner = sender === owner
+            const isOwner = isOwnerJid(sender)
 
             const cmd = commands.get(command)
             if (!cmd) return
@@ -215,7 +271,8 @@ async function startBot() {
                         isOwner,
                         sender,
                         metadata,
-                        m
+                        m,
+                        isOwnerJid // kirim ke semua command
                     })
                 } catch (e) {
                     console.log("CMD ERROR:", e)

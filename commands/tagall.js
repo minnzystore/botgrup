@@ -1,20 +1,14 @@
 module.exports = {
     name: "tagall",
-    execute: async (sock, from, text, db, safeSend, owner, m) => {
+    execute: async (sock, from, text, db, safeSend, ctx) => {
 
-        const metadata = await sock.groupMetadata(from)
-        const participants = metadata.participants
+        const { metadata } = ctx
 
-        let teks = "📢 Tag All:\n\n"
-        let mentions = []
-
-        for (let p of participants) {
-            teks += `@${p.id.split("@")[0]}\n`
-            mentions.push(p.id)
-        }
+        const members = metadata.participants
+        const mentions = members.map(p => p.id)
 
         await sock.sendMessage(from, {
-            text: teks,
+            text: "@semua",
             mentions
         })
     }
