@@ -2,7 +2,7 @@ module.exports = {
     name: "demote",
     execute: async (sock, from, text, db, safeSend, ctx) => {
 
-        const { isAdmin, isOwner, m, isOwnerJid } = ctx
+        const { isAdmin, isOwner, m, isOwnerJid, metadata } = ctx
 
         if (!isAdmin && !isOwner)
             return safeSend(sock, from, { text: "❌ Khusus admin!" })
@@ -22,9 +22,24 @@ module.exports = {
 
         const targetJid = String(target).trim()
 
+        // 🚫 PROTECT OWNER
         if (isOwnerJid(targetJid)) {
             return safeSend(sock, from, {
                 text: "🚫 Owner tidak bisa di demote!"
+            })
+        }
+
+        // 🔍 CEK ADMIN TARGET
+        const admins = metadata.participants
+            .filter(p => p.admin)
+            .map(p => p.id)
+
+        const targetIsAdmin = admins.includes(targetJid)
+
+        // 🚫 Admin tidak bisa demote admin lain (kecuali owner)
+        if (targetIsAdmin && !isOwner) {
+            return safeSend(sock, from, {
+                text: "🚫 Tidak bisa demote sesama admin!"
             })
         }
 

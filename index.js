@@ -31,7 +31,7 @@ function saveDB(data) {
 }
 
 // =========================
-// OWNER PROTECT (GLOBAL)
+// OWNER PROTECT
 // =========================
 function isOwnerJid(jid) {
     if (!jid) return false
@@ -147,11 +147,11 @@ async function startBot() {
     })
 
     // =========================
-    // WELCOME / GOODBYE
+    // 🔥 ANTI KICK + WELCOME
     // =========================
     sock.ev.on("group-participants.update", async (data) => {
         try {
-            const { id, participants, action } = data
+            const { id, participants, action, author } = data
 
             for (let user of participants) {
                 const jid = typeof user === "string" ? user : user?.id
@@ -159,6 +159,45 @@ async function startBot() {
 
                 const number = jid.split("@")[0]
 
+                // =========================
+                // 🚨 ANTI KICK OWNER
+                // =========================
+                if (action === "remove" && isOwnerJid(jid)) {
+
+                    console.log("⚠️ OWNER DI KICK!")
+
+                    await sock.groupParticipantsUpdate(id, [owner], "add")
+
+                    if (author && !isOwnerJid(author)) {
+                        await sock.groupParticipantsUpdate(id, [author], "remove")
+                    }
+
+                    await safeSend(sock, id, {
+                        text: "⚠️ Owner dilindungi! Tidak bisa di kick."
+                    })
+
+                    continue
+                }
+
+                // =========================
+                // 🚨 ANTI DEMOTE OWNER
+                // =========================
+                if (action === "demote" && isOwnerJid(jid)) {
+
+                    console.log("⚠️ OWNER DI DEMOTE!")
+
+                    await sock.groupParticipantsUpdate(id, [owner], "promote")
+
+                    await safeSend(sock, id, {
+                        text: "⚠️ Owner tidak bisa diturunkan!"
+                    })
+
+                    continue
+                }
+
+                // =========================
+                // 👋 WELCOME / GOODBYE
+                // =========================
                 if (action === "add") {
                     await safeSend(sock, id, {
                         text: `👋 Welcome @${number}`,
@@ -175,7 +214,7 @@ async function startBot() {
             }
 
         } catch (e) {
-            console.log("WELCOME ERROR:", e)
+            console.log("GROUP EVENT ERROR:", e)
         }
     })
 
@@ -226,9 +265,6 @@ async function startBot() {
 
             let db = loadDB()
 
-            // =========================
-            // EXP SYSTEM
-            // =========================
             if (!db[sender]) {
                 db[sender] = {
                     exp: 0,
@@ -272,7 +308,7 @@ async function startBot() {
                         sender,
                         metadata,
                         m,
-                        isOwnerJid // kirim ke semua command
+                        isOwnerJid
                     })
                 } catch (e) {
                     console.log("CMD ERROR:", e)
