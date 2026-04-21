@@ -1,31 +1,45 @@
+const { exec } = require("child_process")
+const fs = require("fs")
 const axios = require("axios")
 
 module.exports = {
     name: "ttmp3",
     execute: async (sock, from, text, db, safeSend) => {
 
-        const url = text.split(" ")[1]
+        let url = text.split(" ")[1]
+
         if (!url)
             return safeSend(sock, from, { text: "❌ Masukkan link TikTok!" })
 
+        await safeSend(sock, from, { text: "⏳ Memproses..." })
+
         try {
-            const res = await axios.get(`https://api.agatz.xyz/api/tiktok?url=${url}`)
-            const data = res.data.data
+            // 🔥 EXPAND SHORT LINK
+            if (url.includes("vt.tiktok.com")) {
+                const res = await axios.get(url)
+                url = res.request.res.responseUrl
+            }
 
-            // ambil audio
-            const audioUrl = data.music
+            const file = `./tt_${Date.now()}.mp3`
 
-            if (!audioUrl)
-                return safeSend(sock, from, { text: "❌ Audio tidak ditemukan!" })
+            exec(`yt-dlp -x --audio-format mp3 -o "${file}" ${url}`, async (err) => {
 
-            await sock.sendMessage(from, {
-                audio: { url: audioUrl },
-                mimetype: "audio/mpeg"
+                if (err || !fs.existsSync(file)) {
+                    console.log(err)
+                    return safeSend(sock, from, { text: "❌ Gagal ambil audio" })
+                }
+
+                await sock.sendMessage(from, {
+                    audio: fs.readFileSync(file),
+                    mimetype: "audio/mpeg"
+                })
+
+                fs.unlinkSync(file)
             })
 
         } catch (e) {
             console.log(e)
-            safeSend(sock, from, { text: "❌ Gagal download audio TikTok" })
+            safeSend(sock, from, { text: "❌ Error saat proses link" })
         }
     }
 }

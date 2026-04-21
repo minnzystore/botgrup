@@ -1,14 +1,19 @@
+require("dotenv").config()
+
 const {
-    default: makeWASocket,
-    useMultiFileAuthState,
-    fetchLatestBaileysVersion,
-    DisconnectReason
+default: makeWASocket,
+useMultiFileAuthState,
+fetchLatestBaileysVersion,
+DisconnectReason
 } = require("@whiskeysockets/baileys")
 
 const P = require("pino")
 const qrcode = require("qrcode-terminal")
 const fs = require("fs")
 
+// =========================
+// OWNER
+// =========================
 const owner = "6285798407870@s.whatsapp.net"
 const prefix = "."
 
@@ -31,21 +36,19 @@ function saveDB(data) {
 }
 
 // =========================
-// OWNER PROTECT
+// 🔥 OWNER DETECT SUPER FIX
 // =========================
 function isOwnerJid(jid) {
     if (!jid) return false
 
-    const owners = [owner]
-    const clean = String(jid).trim()
+    const cleanUser = String(jid).replace(/[^0-9]/g, "")
+    const cleanOwner = String(owner).replace(/[^0-9]/g, "")
 
-    return owners.some(o =>
-        clean === o || clean.includes(o.split("@")[0])
-    )
+    return cleanUser.endsWith(cleanOwner.slice(-10))
 }
 
 // =========================
-// QUEUE
+// QUEUE SYSTEM
 // =========================
 let queue = []
 let isProcessing = false
@@ -63,15 +66,10 @@ async function runQueue() {
 }
 
 // =========================
-// GLOBAL
+// ANTI SPAM
 // =========================
 global.reqCount = {}
 
-const sleep = (ms) => new Promise(res => setTimeout(res, ms))
-
-// =========================
-// ANTI SPAM
-// =========================
 function allowRequest(user) {
     if (!user) return false
 
@@ -96,6 +94,8 @@ function allowRequest(user) {
 // =========================
 // SAFE SEND
 // =========================
+const sleep = (ms) => new Promise(res => setTimeout(res, ms))
+
 async function safeSend(sock, jid, msg) {
     try {
         if (!jid) return
@@ -111,168 +111,161 @@ async function safeSend(sock, jid, msg) {
 // =========================
 async function startBot() {
 
-    const { state, saveCreds } = await useMultiFileAuthState("session")
-    const { version } = await fetchLatestBaileysVersion()
+const { state, saveCreds } = await useMultiFileAuthState("session")  
+const { version } = await fetchLatestBaileysVersion()  
 
-    const sock = makeWASocket({
-        version,
-        logger: P({ level: "silent" }),
-        auth: state
-    })
+const sock = makeWASocket({  
+    version,  
+    logger: P({ level: "silent" }),  
+    auth: state  
+})  
 
-    sock.ev.on("creds.update", saveCreds)
+sock.ev.on("creds.update", saveCreds)  
 
-    // =========================
-    // CONNECTION
-    // =========================
-    sock.ev.on("connection.update", (update) => {
-        const { connection, lastDisconnect, qr } = update
+// =========================
+// CONNECTION
+// =========================
+sock.ev.on("connection.update", (update) => {
+    const { connection, lastDisconnect, qr } = update
 
-        if (qr) qrcode.generate(qr, { small: true })
+    if (qr) qrcode.generate(qr, { small: true })
 
-        if (connection === "open") {
-            console.log("✅ BOT ONLINE")
-        }
-
-        if (connection === "close") {
-            const reason = lastDisconnect?.error?.output?.statusCode
-            console.log("❌ DISCONNECT:", reason)
-
-            if (reason !== DisconnectReason.loggedOut) {
-                setTimeout(startBot, 3000)
-            } else {
-                console.log("⚠️ Scan ulang QR")
-            }
-        }
-    })
-
-    // =========================
-    // 🔥 ANTI KICK + WELCOME
-    // =========================
-    sock.ev.on("group-participants.update", async (data) => {
-        try {
-            const { id, participants, action, author } = data
-
-            for (let user of participants) {
-                const jid = typeof user === "string" ? user : user?.id
-                if (!jid) continue
-
-                const number = jid.split("@")[0]
-
-                // =========================
-                // 🚨 ANTI KICK OWNER
-                // =========================
-                if (action === "remove" && isOwnerJid(jid)) {
-
-                    console.log("⚠️ OWNER DI KICK!")
-
-                    await sock.groupParticipantsUpdate(id, [owner], "add")
-
-                    if (author && !isOwnerJid(author)) {
-                        await sock.groupParticipantsUpdate(id, [author], "remove")
-                    }
-
-                    await safeSend(sock, id, {
-                        text: "⚠️ Owner dilindungi! Tidak bisa di kick."
-                    })
-
-                    continue
-                }
-
-                // =========================
-                // 🚨 ANTI DEMOTE OWNER
-                // =========================
-                if (action === "demote" && isOwnerJid(jid)) {
-
-                    console.log("⚠️ OWNER DI DEMOTE!")
-
-                    await sock.groupParticipantsUpdate(id, [owner], "promote")
-
-                    await safeSend(sock, id, {
-                        text: "⚠️ Owner tidak bisa diturunkan!"
-                    })
-
-                    continue
-                }
-
-                // =========================
-                // 👋 WELCOME / GOODBYE
-                // =========================
-                if (action === "add") {
-                    await safeSend(sock, id, {
-                        text: `👋 Welcome @${number}`,
-                        mentions: [jid]
-                    })
-                }
-
-                if (action === "remove") {
-                    await safeSend(sock, id, {
-                        text: `👋 Goodbye @${number}`,
-                        mentions: [jid]
-                    })
-                }
-            }
-
-        } catch (e) {
-            console.log("GROUP EVENT ERROR:", e)
-        }
-    })
-
-    // =========================
-    // LOAD COMMANDS
-    // =========================
-    const commands = new Map()
-
-    if (fs.existsSync("./commands")) {
-        for (const file of fs.readdirSync("./commands")) {
-            try {
-                const cmd = require(`./commands/${file}`)
-                if (cmd?.name && cmd?.execute) {
-                    commands.set(cmd.name.toLowerCase(), cmd)
-                }
-            } catch (e) {
-                console.log("LOAD CMD ERROR:", e)
-            }
-        }
+    if (connection === "open") {
+        console.log("✅ BOT ONLINE")
     }
 
-    // =========================
-    // MESSAGE HANDLER
-    // =========================
-    sock.ev.on("messages.upsert", async ({ messages }) => {
-        try {
-            const m = messages?.[0]
-            if (!m?.message || !m.key) return
-            if (m.key.fromMe) return
+    if (connection === "close") {
+        const reason = lastDisconnect?.error?.output?.statusCode
 
-            const from = m.key.remoteJid
-            if (!from || !from.endsWith("@g.us")) return
+        if (reason !== DisconnectReason.loggedOut) {
+            setTimeout(startBot, 3000)
+        } else {
+            console.log("⚠️ Scan ulang QR")
+        }
+    }
+})
 
-            const sender = m.key.participant || m.key.remoteJid
-            if (!sender) return
+// =========================
+// 🔥 GROUP EVENT
+// =========================
+sock.ev.on("group-participants.update", async (data) => {
+    try {
+        const { id, participants, action, author } = data
 
-            const text = (
-                m.message?.conversation ||
-                m.message?.extendedTextMessage?.text ||
-                ""
-            ).trim()
+        for (let user of participants) {
+            const jid = typeof user === "string" ? user : user?.id
+            if (!jid) continue
 
-            if (!text.startsWith(prefix)) return
+            const clean = jid.split(":")[0]
+            const number = clean.split("@")[0]
 
-            if (!allowRequest(sender)) return
+            // ANTI KICK OWNER
+            if (action === "remove" && isOwnerJid(clean)) {
+                await sock.groupParticipantsUpdate(id, [owner], "add")
 
-            const command = text.slice(1).split(" ")[0].toLowerCase()
-
-            let db = loadDB()
-
-            if (!db[sender]) {
-                db[sender] = {
-                    exp: 0,
-                    level: 1,
-                    created: Date.now()
+                if (author && !isOwnerJid(author)) {
+                    await sock.groupParticipantsUpdate(id, [author], "remove")
                 }
+
+                await safeSend(sock, id, {
+                    text: "⚠️ Owner dilindungi!"
+                })
+                continue
             }
 
+            // ANTI DEMOTE OWNER
+            if (action === "demote" && isOwnerJid(clean)) {
+                await sock.groupParticipantsUpdate(id, [owner], "promote")
+
+                await safeSend(sock, id, {
+                    text: "⚠️ Owner tidak bisa diturunkan!"
+                })
+                continue
+            }
+
+            // WELCOME
+            if (action === "add") {
+                await safeSend(sock, id, {
+                    text: `✨ Welcome @${number} ✨`,
+                    mentions: [clean]
+                })
+            }
+
+            // GOODBYE
+            if (action === "remove") {
+                await safeSend(sock, id, {
+                    text: `👋 Goodbye @${number}`,
+                    mentions: [clean]
+                })
+            }
+        }
+
+    } catch (e) {
+        console.log("GROUP EVENT ERROR:", e)
+    }
+})
+
+// =========================
+// LOAD COMMANDS
+// =========================
+const commands = new Map()
+
+if (fs.existsSync("./commands")) {
+    for (const file of fs.readdirSync("./commands")) {
+        try {
+            const cmd = require(`./commands/${file}`)
+            if (cmd?.name && cmd?.execute) {
+                commands.set(cmd.name.toLowerCase(), cmd)
+            }
+        } catch (e) {
+            console.log("LOAD CMD ERROR:", e)
+        }
+    }
+}
+
+// =========================
+// MESSAGE HANDLER
+// =========================
+sock.ev.on("messages.upsert", async ({ messages }) => {
+    try {
+        const m = messages?.[0]
+        if (!m?.message || !m.key) return
+        if (m.key.fromMe) return
+
+        const from = m.key.remoteJid
+        if (!from || !from.endsWith("@g.us")) return
+
+        // 🔥 FIX SENDER
+        const rawSender = m.key.participant || m.key.remoteJid
+        const sender = rawSender.split(":")[0]
+
+        const text = (
+            m.message?.conversation ||
+            m.message?.extendedTextMessage?.text ||
+            ""
+        ).trim()
+
+        if (!text.startsWith(prefix)) return
+        if (!allowRequest(sender)) return
+
+        const command = text.slice(1).split(" ")[0].toLowerCase()
+
+        let db = loadDB()
+
+        // INIT USER
+        if (!db[sender]) {
+            db[sender] = {
+                exp: 0,
+                level: 1,
+                created: Date.now()
+            }
+        }
+
+        // 🔥 OWNER AUTO DEWA
+        if (isOwnerJid(sender)) {
+            db[sender].level = Infinity
+            db[sender].exp = Infinity
+        } else {
             db[sender].exp += 10
 
             const need = db[sender].level * 100
@@ -286,41 +279,39 @@ async function startBot() {
                     mentions: [sender]
                 })
             }
-
-            saveDB(db)
-
-            const metadata = await sock.groupMetadata(from)
-            const admins = metadata.participants
-                .filter(p => p.admin)
-                .map(p => p.id)
-
-            const isAdmin = admins.includes(sender)
-            const isOwner = isOwnerJid(sender)
-
-            const cmd = commands.get(command)
-            if (!cmd) return
-
-            queue.push(async () => {
-                try {
-                    await cmd.execute(sock, from, text, db, safeSend, {
-                        isAdmin,
-                        isOwner,
-                        sender,
-                        metadata,
-                        m,
-                        isOwnerJid
-                    })
-                } catch (e) {
-                    console.log("CMD ERROR:", e)
-                }
-            })
-
-            runQueue()
-
-        } catch (e) {
-            console.log("ERROR:", e)
         }
-    })
+
+        saveDB(db)
+
+        const metadata = await sock.groupMetadata(from)
+        const admins = metadata.participants
+            .filter(p => p.admin)
+            .map(p => p.id.split(":")[0])
+
+        const isAdmin = admins.includes(sender)
+        const isOwner = isOwnerJid(sender)
+
+        const cmd = commands.get(command)
+        if (!cmd) return
+
+        queue.push(async () => {
+            await cmd.execute(sock, from, text, db, safeSend, {
+                isAdmin,
+                isOwner,
+                sender,
+                metadata,
+                m,
+                isOwnerJid
+            })
+        })
+
+        runQueue()
+
+    } catch (e) {
+        console.log("ERROR:", e)
+    }
+})
+
 }
 
 startBot()
