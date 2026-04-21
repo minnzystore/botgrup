@@ -4,33 +4,38 @@ const path = require("path")
 const ffmpeg = require("fluent-ffmpeg")
 
 module.exports = {
-    name: "stickermeme",
+    name: "sticktext",
     execute: async (sock, from, text, db, safeSend) => {
 
+        const query = text.replace(".sticktext", "").trim()
+
+        if (!query) {
+            return safeSend(sock, from, {
+                text: "❌ Contoh:\n.sticktext Halo dunia"
+            })
+        }
+
         try {
-            const res = await axios.get("https://meme-api.com/gimme")
-            const imgUrl = res.data.url
+            // pakai dummy image text generator
+            const url = `https://dummyimage.com/512x512/000/fff.png&text=${encodeURIComponent(query)}`
 
-            const input = path.join(__dirname, "../temp/meme.jpg")
-            const output = path.join(__dirname, "../temp/meme.webp")
+            const input = path.join(__dirname, "../temp/text.png")
+            const output = path.join(__dirname, "../temp/text.webp")
 
-            // download image
-            const response = await axios({
-                url: imgUrl,
+            const res = await axios({
+                url,
                 method: "GET",
                 responseType: "arraybuffer"
             })
 
-            fs.writeFileSync(input, response.data)
+            fs.writeFileSync(input, res.data)
 
-            // convert HD
             await new Promise((resolve, reject) => {
                 ffmpeg(input)
                     .outputOptions([
                         "-vcodec libwebp",
-                        "-vf scale=512:512:force_original_aspect_ratio=decrease",
+                        "-vf scale=512:512",
                         "-lossless 1",
-                        "-compression_level 6",
                         "-q:v 100"
                     ])
                     .toFormat("webp")
@@ -49,10 +54,10 @@ module.exports = {
             fs.unlinkSync(output)
 
         } catch (e) {
-            console.log("STICKER MEME ERROR:", e)
+            console.log("STICKTEXT ERROR:", e)
 
             await safeSend(sock, from, {
-                text: "❌ Gagal ambil sticker meme 😭"
+                text: "❌ Gagal buat sticker text 😭"
             })
         }
     }
