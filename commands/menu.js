@@ -44,6 +44,7 @@ module.exports = {
             if (level >= 150) rank = "Immortal 💀"
             if (level >= 200) rank = "God Mode 🪐"
             if (level >= 999) rank = "VVIP 👑🌟💎🔥"
+            if (level >= 10000000000) rank = "Dewa tertinggi 🌌"
         }
 
         // 🕒 TIME

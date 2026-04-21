@@ -1,28 +1,39 @@
 const { downloadContentFromMessage } = require("@whiskeysockets/baileys")
+const ffmpeg = require("fluent-ffmpeg")
 const fs = require("fs")
 const path = require("path")
-const ffmpeg = require("fluent-ffmpeg")
 
 module.exports = {
     name: "sticker",
     execute: async (sock, from, text, db, safeSend, ctx) => {
 
         const { m } = ctx
+        if (!m) return
 
         try {
-            const quoted = m.quoted ? m.quoted : m
-            const mime = quoted.mtype || ""
+            let message = m.message
+            let type = Object.keys(message)[0]
 
-            if (!/image|video/.test(mime)) {
+            // 🔥 HANDLE REPLY
+            if (type === "extendedTextMessage") {
+                const quoted = message.extendedTextMessage?.contextInfo?.quotedMessage
+                if (quoted) {
+                    message = quoted
+                    type = Object.keys(message)[0]
+                }
+            }
+
+            // 🔥 VALIDASI MEDIA
+            if (!/imageMessage|videoMessage/.test(type)) {
                 return safeSend(sock, from, {
-                    text: "❌ Reply gambar/video!"
+                    text: "❌ Kirim / reply gambar atau video dengan caption .sticker"
                 })
             }
 
-            // ambil media
+            // 🔥 DOWNLOAD MEDIA
             const stream = await downloadContentFromMessage(
-                quoted.message[mime],
-                mime.replace("Message", "")
+                message[type],
+                type.replace("Message", "")
             )
 
             let buffer = Buffer.from([])
@@ -30,42 +41,50 @@ module.exports = {
                 buffer = Buffer.concat([buffer, chunk])
             }
 
-            const inputPath = path.join(__dirname, "../temp/input")
-            const outputPath = path.join(__dirname, "../temp/output.webp")
+            // 📁 TEMP FILE
+            const input = path.join(__dirname, "../temp/input")
+            const output = path.join(__dirname, "../temp/output.webp")
 
-            fs.writeFileSync(inputPath, buffer)
+            if (!fs.existsSync(path.join(__dirname, "../temp"))) {
+                fs.mkdirSync(path.join(__dirname, "../temp"))
+            }
 
-            // convert ke WEBP HD
+            fs.writeFileSync(input, buffer)
+
+            // 🔥 CONVERT KE WEBP HD (ANTI GEPENG)
             await new Promise((resolve, reject) => {
-                ffmpeg(inputPath)
-                    .outputOptions([
-                        "-vcodec libwebp",
-                        "-vf scale=512:512:force_original_aspect_ratio=decrease",
-                        "-lossless 1",
-                        "-compression_level 6",
-                        "-q:v 100"
-                    ])
-                    .toFormat("webp")
-                    .save(outputPath)
-                    .on("end", resolve)
-                    .on("error", reject)
-            })
+    ffmpeg(input)
+        .outputOptions([
+            "-vcodec", "libwebp",
+            "-vf",
+            "scale=512:512:force_original_aspect_ratio=decrease",
+            "-lossless", "1",
+            "-qscale", "100",
+            "-preset", "default",
+            "-loop", "0",
+            "-an",
+            "-vsync", "0"
+        ])
+        .save(output)
+        .on("end", resolve)
+        .on("error", reject)
+})
 
-            const stickerBuffer = fs.readFileSync(outputPath)
+            const sticker = fs.readFileSync(output)
 
+            // 🔥 KIRIM STICKER
             await sock.sendMessage(from, {
-                sticker: stickerBuffer
+                sticker: sticker
             })
 
-            // hapus file temp
-            fs.unlinkSync(inputPath)
-            fs.unlinkSync(outputPath)
+            // 🧹 HAPUS FILE TEMP
+            fs.unlinkSync(input)
+            fs.unlinkSync(output)
 
         } catch (e) {
-            console.log("STICKER HD ERROR:", e)
-
-            await safeSend(sock, from, {
-                text: "❌ Gagal buat sticker HD 😭"
+            console.log("STICKER ERROR:", e)
+            safeSend(sock, from, {
+                text: "❌ Gagal membuat sticker"
             })
         }
     }

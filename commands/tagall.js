@@ -8,7 +8,7 @@ module.exports = {
         const mentions = members.map(p => p.id)
 
         await sock.sendMessage(from, {
-            text: "@semua",
+            text: "minasang",
             mentions
         })
     }
