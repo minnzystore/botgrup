@@ -17,6 +17,7 @@ module.exports = {
 
         let level = Number(db[sender].level) || 1
         let exp = Number(db[sender].exp) || 0
+        const maxExp = level * 100
 
         // =========================
         // OWNER
@@ -36,9 +37,6 @@ module.exports = {
 
             if (isAdmin) role = "Admin 🛡️"
 
-            // =========================
-            // RANK SYSTEM
-            // =========================
             if (level >= 2) rank = "Iron ⚙️"
             if (level >= 5) rank = "Silver 🥈"
             if (level >= 10) rank = "Gold 🥇"
@@ -51,6 +49,7 @@ module.exports = {
             if (level >= 100) rank = "Supreme 👑"
             if (level >= 150) rank = "Immortal 💀"
             if (level >= 200) rank = "God Mode 🪐"
+            if (level >= 999) rank = "VVIP 👑🌟💎🔥"
         }
 
         // =========================
@@ -63,44 +62,72 @@ module.exports = {
         })
 
         // =========================
-        // MENU
+        // PROGRESS BAR SIMPLE
+        // =========================
+        let bar = ""
+        if (!isOwner) {
+            const percent = Math.floor((exp / maxExp) * 100)
+            const filled = Math.floor(percent / 10)
+            bar = "█".repeat(filled) + "░".repeat(10 - filled)
+            bar = `${bar} ${percent}%`
+        } else {
+            bar = "∞∞∞∞∞∞∞∞∞∞"
+        }
+
+        // =========================
+        // MENU AESTHETIC ANIME
         // =========================
         const menu = `
-╔═━━━「 𝐌𝐈𝐍𝐍𝐙𝐘 𝐁𝐎𝐓 」━━━═╗
-║ 👑 Owner : ${ownerName}
-║ 👤 User  : ${username}
-║ 🎭 Role  : ${role}
-║ 🏆 Rank  : ${rank}
-║ 📊 Level : ${level}
-║ ⭐ EXP   : ${exp}
-║ 🆔 Nomor : @${sender.split("@")[0]}
-║ 🕒 WIB   : ${wibTime}
-╚═━━━━━━━━━━━━━━━━━━━═╝
+╭━━━〔 🌸 𝐌𝐈𝐍𝐍𝐙𝐘 𝐁𝐎𝐓 🌸 〕━━━╮
+┃ 👑 Owner   : ${ownerName}
+┃ 👤 User    : ${username}
+┃ 🎭 Role    : ${role}
+┃ 🏆 Rank    : ${rank}
+┃ 📊 Level   : ${level}
+┃ ⭐ EXP     : ${exp}${isOwner ? "" : ` / ${maxExp}`}
+┃ 📈 Progress: ${bar}
+┃ 🆔 Nomor   : @${sender.split("@")[0]}
+┃ 🕒 Time    : ${wibTime}
+╰━━━━━━━━━━━━━━━━━━━━━━╯
 
-┌─〔 📋 MENU UTAMA 〕
+┌───〔 🌟 MENU UTAMA 〕
 │ ✧ .menu
 │ ✧ .profile
 │ ✧ .info
-└───────────────
+└────────────
 
-┌─〔 👑 ADMIN MENU 〕
+┌───〔 👑 ADMIN 〕
 │ ✧ .tagall
 │ ✧ .kick
 │ ✧ .promote
 │ ✧ .demote
-└───────────────
+└────────────
 
-┌─〔 📥 DOWNLOADER 〕
+┌───〔 📥 DOWNLOADER 〕
 │ 🎵 .ytmp3 link
 │ 🎬 .ytmp4 link
 │ 🎵 .ttmp3 link
 │ 🎬 .ttmp4 link
 │ 📸 .ig link
-└───────────────
+└────────────
 
-┌─〔 ⚡ BOT INFO 〕
-│ ✧ Status : Aktif
-└───────────────
+┌───〔 ⚡ STATUS 〕
+│ 🤖 Bot Name : MinnzyBot
+│ 🎌 Style    : Anime Mode
+│ 🟢 Status   : Active & Online
+└────────────
+
+┌───〔 💬 MOTIVASI 〕
+│ ✨ "Jangan menyerah ya..."
+│ 🌸 "Kamu lebih kuat dari yang kamu kira!"
+│ 💫 "Pelan-pelan juga gapapa, yang penting jalan!"
+└────────────
+
+┌───〔 ⚠️ PERINGATAN 〕
+│ 🚫 Jangan spam bot
+│ 🚫 Gunakan dengan bijak
+│ ⚡ Abuse = Auto Block
+└────────────
 `
 
         await sock.sendMessage(from, {
