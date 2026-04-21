@@ -101,6 +101,8 @@ module.exports = {
 │ ✧ .sticker (reply img/video)
 │ ✧ .sticktext teks
 │ ✧ .stickermeme
+│ fitur sticker belum
+│ bisa digunakan yaww
 └────────────
 
 ┌───〔 😂 FUN 〕

@@ -12,6 +12,12 @@ const qrcode = require("qrcode-terminal")
 const fs = require("fs")
 
 // =========================
+// SAFE HANDLER (ANTI CRASH)
+// =========================
+process.on("uncaughtException", console.error)
+process.on("unhandledRejection", console.error)
+
+// =========================
 // OWNER
 // =========================
 const owner = "6285798407870@s.whatsapp.net"
@@ -36,15 +42,13 @@ function saveDB(data) {
 }
 
 // =========================
-// 🔥 OWNER DETECT SUPER FIX
+// OWNER CHECK FIX
 // =========================
 function isOwnerJid(jid) {
     if (!jid) return false
-
-    const cleanUser = String(jid).replace(/[^0-9]/g, "")
-    const cleanOwner = String(owner).replace(/[^0-9]/g, "")
-
-    return cleanUser.endsWith(cleanOwner.slice(-10))
+    const cleanUser = jid.replace(/[^0-9]/g, "")
+    const cleanOwner = owner.replace(/[^0-9]/g, "")
+    return cleanUser === cleanOwner
 }
 
 // =========================
@@ -111,16 +115,16 @@ async function safeSend(sock, jid, msg) {
 // =========================
 async function startBot() {
 
-const { state, saveCreds } = await useMultiFileAuthState("session")  
-const { version } = await fetchLatestBaileysVersion()  
+const { state, saveCreds } = await useMultiFileAuthState("session")
+const { version } = await fetchLatestBaileysVersion()
 
-const sock = makeWASocket({  
-    version,  
-    logger: P({ level: "silent" }),  
-    auth: state  
-})  
+const sock = makeWASocket({
+    version,
+    logger: P({ level: "silent" }),
+    auth: state
+})
 
-sock.ev.on("creds.update", saveCreds)  
+sock.ev.on("creds.update", saveCreds)
 
 // =========================
 // CONNECTION
@@ -146,62 +150,33 @@ sock.ev.on("connection.update", (update) => {
 })
 
 // =========================
-// 🔥 GROUP EVENT
+// GROUP EVENTS
 // =========================
 sock.ev.on("group-participants.update", async (data) => {
     try {
-        const { id, participants, action, author } = data
+        const { id, participants, action } = data
 
         for (let user of participants) {
-            const jid = typeof user === "string" ? user : user?.id
-            if (!jid) continue
+            const jid = user.includes("@") ? user : user + "@s.whatsapp.net"
+            const number = jid.split("@")[0]
 
-            const clean = jid.split(":")[0]
-            const number = clean.split("@")[0]
-
-            // ANTI KICK OWNER
-            if (action === "remove" && isOwnerJid(clean)) {
-                await sock.groupParticipantsUpdate(id, [owner], "add")
-
-                if (author && !isOwnerJid(author)) {
-                    await sock.groupParticipantsUpdate(id, [author], "remove")
-                }
-
-                await safeSend(sock, id, {
-                    text: "⚠️ Owner dilindungi!"
-                })
-                continue
-            }
-
-            // ANTI DEMOTE OWNER
-            if (action === "demote" && isOwnerJid(clean)) {
-                await sock.groupParticipantsUpdate(id, [owner], "promote")
-
-                await safeSend(sock, id, {
-                    text: "⚠️ Owner tidak bisa diturunkan!"
-                })
-                continue
-            }
-
-            // WELCOME
             if (action === "add") {
                 await safeSend(sock, id, {
                     text: `✨ Welcome @${number} ✨`,
-                    mentions: [clean]
+                    mentions: [jid]
                 })
             }
 
-            // GOODBYE
             if (action === "remove") {
                 await safeSend(sock, id, {
                     text: `👋 Goodbye @${number}`,
-                    mentions: [clean]
+                    mentions: [jid]
                 })
             }
         }
 
     } catch (e) {
-        console.log("GROUP EVENT ERROR:", e)
+        console.log("GROUP ERROR:", e)
     }
 })
 
@@ -218,7 +193,7 @@ if (fs.existsSync("./commands")) {
                 commands.set(cmd.name.toLowerCase(), cmd)
             }
         } catch (e) {
-            console.log("LOAD CMD ERROR:", e)
+            console.log("CMD ERROR:", e)
         }
     }
 }
@@ -228,16 +203,11 @@ if (fs.existsSync("./commands")) {
 // =========================
 sock.ev.on("messages.upsert", async ({ messages }) => {
     try {
-        const m = messages?.[0]
-        if (!m?.message || !m.key) return
-        if (m.key.fromMe) return
+        const m = messages[0]
+        if (!m?.message || m.key.fromMe) return
 
         const from = m.key.remoteJid
-        if (!from || !from.endsWith("@g.us")) return
-
-        // 🔥 FIX SENDER
-        const rawSender = m.key.participant || m.key.remoteJid
-        const sender = rawSender.split(":")[0]
+        const sender = m.key.participant || from
 
         const text = (
             m.message?.conversation ||
@@ -252,16 +222,10 @@ sock.ev.on("messages.upsert", async ({ messages }) => {
 
         let db = loadDB()
 
-        // INIT USER
         if (!db[sender]) {
-            db[sender] = {
-                exp: 0,
-                level: 1,
-                created: Date.now()
-            }
+            db[sender] = { exp: 0, level: 1 }
         }
 
-        // 🔥 OWNER AUTO DEWA
         if (isOwnerJid(sender)) {
             db[sender].level = Infinity
             db[sender].exp = Infinity
@@ -275,7 +239,7 @@ sock.ev.on("messages.upsert", async ({ messages }) => {
                 db[sender].exp = 0
 
                 await safeSend(sock, from, {
-                    text: `🎉 @${sender.split("@")[0]} naik ke level ${db[sender].level}!`,
+                    text: `🎉 @${sender.split("@")[0]} naik level ${db[sender].level}!`,
                     mentions: [sender]
                 })
             }
@@ -283,25 +247,14 @@ sock.ev.on("messages.upsert", async ({ messages }) => {
 
         saveDB(db)
 
-        const metadata = await sock.groupMetadata(from)
-        const admins = metadata.participants
-            .filter(p => p.admin)
-            .map(p => p.id.split(":")[0])
-
-        const isAdmin = admins.includes(sender)
-        const isOwner = isOwnerJid(sender)
-
         const cmd = commands.get(command)
         if (!cmd) return
 
         queue.push(async () => {
             await cmd.execute(sock, from, text, db, safeSend, {
-                isAdmin,
-                isOwner,
                 sender,
-                metadata,
                 m,
-                isOwnerJid
+                isOwner: isOwnerJid(sender)
             })
         })
 
