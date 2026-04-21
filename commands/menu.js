@@ -8,9 +8,6 @@ module.exports = {
 
         const username = m.pushName || "User"
 
-        // =========================
-        // SAFE DB
-        // =========================
         if (!db[sender]) {
             db[sender] = { level: 1, exp: 0 }
         }
@@ -19,15 +16,12 @@ module.exports = {
         let exp = Number(db[sender].exp) || 0
         const maxExp = level * 100
 
-        // =========================
-        // OWNER
-        // =========================
         const ownerName = "Mikasa Amerta"
 
         let role = "User"
         let rank = "Bronze 🥉"
 
-        // 🔥 OWNER MODE
+        // 👑 OWNER MODE
         if (isOwner) {
             role = "Dewa Pencipta 👑"
             rank = "Dewa Tertinggi 🌌"
@@ -52,18 +46,13 @@ module.exports = {
             if (level >= 999) rank = "VVIP 👑🌟💎🔥"
         }
 
-        // =========================
-        // TIME
-        // =========================
+        // 🕒 TIME
         const now = new Date()
-
         const wibTime = now.toLocaleString("id-ID", {
             timeZone: "Asia/Jakarta"
         })
 
-        // =========================
-        // PROGRESS BAR SIMPLE
-        // =========================
+        // 📊 PROGRESS
         let bar = ""
         if (!isOwner) {
             const percent = Math.floor((exp / maxExp) * 100)
@@ -74,9 +63,7 @@ module.exports = {
             bar = "∞∞∞∞∞∞∞∞∞∞"
         }
 
-        // =========================
-        // MENU AESTHETIC ANIME
-        // =========================
+        // 🌸 MENU
         const menu = `
 ╭━━━〔 🌸 𝐌𝐈𝐍𝐍𝐙𝐘 𝐁𝐎𝐓 🌸 〕━━━╮
 ┃ 👑 Owner   : ${ownerName}
@@ -103,12 +90,30 @@ module.exports = {
 │ ✧ .demote
 └────────────
 
+┌───〔 🎮 GAME 〕
+│ ✧ .tictactoe
+│ ✧ .join
+│ ✧ .move
+└────────────
+
+┌───〔 🧩 STICKER 〕
+│ ✧ .sticker (reply img/video)
+│ ✧ .sticktext teks
+│ ✧ .stickermeme
+└────────────
+
+┌───〔 😂 FUN 〕
+│ ✧ .memeindo
+│ ✧ .memeanime
+│ ✧ .rate
+└────────────
+
 ┌───〔 📥 DOWNLOADER 〕
-│ 🎵 .ytmp3 link
-│ 🎬 .ytmp4 link
-│ 🎵 .ttmp3 link
-│ 🎬 .ttmp4 link
-│ 📸 .ig link
+│ 🎵 .ytmp3
+│ 🎬 .ytmp4
+│ 🎵 .ttmp3
+│ 🎬 .ttmp4
+│ 📸 .ig
 └────────────
 
 ┌───〔 ⚡ STATUS 〕
@@ -118,9 +123,9 @@ module.exports = {
 └────────────
 
 ┌───〔 💬 MOTIVASI 〕
-│ ✨ "Jangan menyerah ya..."
-│ 🌸 "Kamu lebih kuat dari yang kamu kira!"
-│ 💫 "Pelan-pelan juga gapapa, yang penting jalan!"
+│ ✨ "Pelan-pelan juga ga apa"
+│ 🌸 "Kamu kuat, jangan nyerah!"
+│ 💫 "Hari ini susah? Besok pasti bisa!"
 └────────────
 
 ┌───〔 ⚠️ PERINGATAN 〕

@@ -10,80 +10,93 @@ module.exports = {
         const username = m.pushName || "User"
 
         // =========================
-        // DATABASE SAFE
+        // DB SAFE
         // =========================
-        if (!db[sender]) db[sender] = { level: 1, exp: 0 }
+        if (!db[sender]) {
+            db[sender] = { level: 1, exp: 0 }
+        }
 
         let level = db[sender].level
         let exp = db[sender].exp
 
-        // =========================
-        // ROLE & RANK
-        // =========================
         let role = "User"
         let rank = "Bronze 🥉"
 
+        // =========================
+        // OWNER MODE
+        // =========================
         if (isOwner) {
             role = "Dewa Pencipta 👑"
-            rank = "Ackerman Bloodline ⚔️🔥"
+            rank = "Dewa Tertinggi 🌌"
             level = "∞"
             exp = "∞"
         } else {
-            if (isAdmin) role = "Elite Soldier 🛡️"
+            if (isAdmin) role = "Admin 🛡️"
 
-            if (level >= 5) rank = "Cadet 🪖"
-            if (level >= 10) rank = "Scout ⚔️"
-            if (level >= 20) rank = "Captain 🏹"
-            if (level >= 50) rank = "Elite Ackerman 🔥"
-            if (level >= 100) rank = "Humanity's Strongest 💀"
+            if (level >= 2) rank = "Iron ⚙️"
+            if (level >= 5) rank = "Silver 🥈"
+            if (level >= 10) rank = "Gold 🥇"
+            if (level >= 15) rank = "Platinum 💎"
+            if (level >= 20) rank = "Diamond 🔷"
+            if (level >= 30) rank = "Master 🏅"
+            if (level >= 40) rank = "Grandmaster ⚡"
+            if (level >= 50) rank = "Mythic 🔥"
+            if (level >= 75) rank = "Legend 🌟"
+            if (level >= 100) rank = "Supreme 👑"
+            if (level >= 150) rank = "Immortal 💀"
+            if (level >= 200) rank = "God Mode 🪐"
+            if (level >= 999) rank = "VVIP 👑🔥💎"
         }
 
         // =========================
-        // PROFILE PICTURE
+        // TIME
         // =========================
-        let pp = "https://i.ibb.co/2kR5zqB/user.png"
-        try {
-            pp = await sock.profilePictureUrl(sender, "image")
-        } catch {}
+        const time = new Date().toLocaleString("id-ID", {
+            timeZone: "Asia/Jakarta"
+        })
 
         // =========================
-        // BACKGROUND MIKASA (DARK)
-        // =========================
-        const bg = "https://i.ibb.co/0jqHP0v/mikasa-dark.jpg"
-
-        // =========================
-        // API IMAGE (AESTHETIC)
-        // =========================
-        const imageUrl = `https://api.popcat.xyz/welcomecard?background=${encodeURIComponent(bg)}&text1=${encodeURIComponent(username)}&text2=${encodeURIComponent(rank)}&text3=Lv:${level}&avatar=${encodeURIComponent(pp)}`
-
-        // =========================
-        // CAPTION MIKASA STYLE
+        // CAPTION (AESTHETIC)
         // =========================
         const caption = `
-⚔️ 「 𝐌𝐈𝐍𝐍𝐙𝐘 - 𝐌𝐈𝐊𝐀𝐒𝐀 𝐒𝐓𝐘𝐋𝐄 」 ⚔️
+╭──〔 🌸 𝐌𝐈𝐍𝐍𝐙𝐘 𝐏𝐑𝐎𝐅𝐈𝐋𝐄 🌸 〕──
+│ 👤 Nama   : ${username}
+│ 🎭 Role   : ${role}
+│ 🏆 Rank   : ${rank}
+│ 📊 Level  : ${level}
+│ ⭐ EXP    : ${exp}
+│ 🆔 ID     : @${sender.split("@")[0]}
+│ 🕒 WIB    : ${time}
+╰─────────────────────
 
-👤 Nama   : ${username}
-🎭 Role   : ${role}
-🏆 Rank   : ${rank}
-📊 Level  : ${level}
-⭐ EXP    : ${exp}
+💬 *"Teruslah berkembang, bahkan karakter terkuat pun pernah lemah."*
 
-🧠 "Kalau aku tidak bertarung... aku tidak akan menang."
-
-🔥 Tetap kuat, tetap fokus.
-💢 Jangan mudah menyerah.
-
-⚠️ Gunakan bot dengan bijak
-🚫 Jangan spam atau abuse fitur
+⚠️ Jangan spam bot ya!
+✨ Gunakan dengan bijak
 `
 
         // =========================
-        // SEND
+        // AVATAR (ANTI ERROR)
         // =========================
-        await sock.sendMessage(from, {
-            image: { url: imageUrl },
-            caption,
-            mentions: [sender]
-        })
+        const imageUrl = `https://api.dicebear.com/7.x/anime/png?seed=${encodeURIComponent(username)}`
+
+        try {
+            const res = await axios.get(imageUrl, {
+                responseType: "arraybuffer"
+            })
+
+            await sock.sendMessage(from, {
+                image: Buffer.from(res.data),
+                caption,
+                mentions: [sender]
+            })
+
+        } catch (e) {
+            console.log("IMG ERROR:", e)
+
+            await safeSend(sock, from, {
+                text: caption
+            })
+        }
     }
 }
