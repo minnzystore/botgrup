@@ -1,22 +1,17 @@
 {
   "name": "Minnzybot",
   "version": "1.0.0",
-  "description": "WhatsApp Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.0",
+    "@whiskeysockets/baileys": "^6.7.21",
     "axios": "^1.6.0",
-    "dotenv": "^16.0.0",
+    "dotenv": "^16.6.1",
     "fluent-ffmpeg": "^2.1.3",
-    "pino": "^8.0.0",
+    "pino": "^8.21.0",
     "qrcode-terminal": "^0.12.0",
-    "sharp": "^0.34.0"
+    "sharp": "^0.34.5"
   }
 }
